@@ -43,10 +43,11 @@ uci_get_by_type() {
 
 add_cron()
 {
-	sed -i '/shadowsocksr/d' $CRON_FILE
-	sed -i '/ssrplus.log/d' $CRON_FILE && echo '0 1 * * * echo "" > /tmp/ssrplus.log' >> $CRON_FILE
+	sed -i '/ssrplus.log/d' $CRON_FILE
+	echo '0 1 * * * echo "" > /tmp/ssrplus.log' >> $CRON_FILE
+	[ -n "$(grep -w "/usr/share/shadowsocksr/subscribe.sh" $CRON_FILE)" ] && sed -i '/\/usr\/share\/shadowsocksr\/subscribe.sh/d' $CRON_FILE
 	[ $(uci_get_by_type server_subscribe auto_update 0) -eq 1 ] && echo "0 $(uci_get_by_type server_subscribe auto_update_time) * * * /usr/share/shadowsocksr/subscribe.sh" >> $CRON_FILE
-	[ $(uci_get_by_type server_subscribe auto_update 0) -eq 1 ] && echo "0 5 * * * /usr/share/shadowsocksr/update.sh" >> $CRON_FILE
+	[ -z "$(grep -w "/usr/share/shadowsocksr/update.sh" $CRON_FILE)" ] && echo "0 5 * * * /usr/share/shadowsocksr/update.sh" >> $CRON_FILE
 	crontab $CRON_FILE
 }
 
@@ -66,7 +67,7 @@ gen_config_file() {
          elif  [ "$host" != "${host#*:[0-9a-fA-F]}" ] ;then
          hostip=${host}
          else
-          hostip=`ping ${host} -s 1 -c 1 | grep PING | cut -d'(' -f 2 | cut -d')' -f1`
+          hostip=`nslookup ${host} | grep 'Address 1' | sed 's/Address 1: //g'`
           if echo $hostip|grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$">/dev/null; then
           hostip=${hostip}
           else
@@ -125,7 +126,7 @@ EOF
         lua /usr/share/shadowsocksr/genv2config.lua $GLOBAL_SERVER tcp $(uci_get_by_name $1 local_port) > /var/etc/v2-ssr-retcp.json
         sed -i 's/\\//g' /var/etc/v2-ssr-retcp.json
       elif [ "$stype" == "trojan" ] ;then
-        lua /usr/share/shadowsocksr/gentrojanconfig.lua $GLOBAL_SERVER nat $(uci_get_by_name $1 local_port) > /var/etc/trojan-ssr-retcp.json
+        lua /usr/share/shadowsocksr/trojanconfig.lua $GLOBAL_SERVER tcp $(uci_get_by_name $1 local_port) > /var/etc/trojan-ssr-retcp.json
         sed -i 's/\\//g' /var/etc/trojan-ssr-retcp.json
 fi
 }
@@ -145,7 +146,7 @@ start_rules() {
 	elif  [ "$server" != "${server#*:[0-9a-fA-F]}" ] ;then
 	server=${server}
 	else
-	server=`ping ${server} -s 1 -c 1 | grep PING | cut -d'(' -f 2 | cut -d')' -f1`
+	server=`nslookup ${server} | grep 'Address 1' | sed 's/Address 1: //g'`
 	 if echo $server|grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$">/dev/null; then
 	  echo $server >/etc/ssr_ip
 	 else
@@ -304,7 +305,7 @@ start_redir() {
        elif [ "$stype" == "v2ray" ] ;then
         sscmd="/usr/bin/v2ray/v2ray"
        elif [ "$stype" == "trojan" ] ;then
-        sscmd="/usr/sbin/trojan"
+        sscmd="/usr/bin/trojan/trojan"
     fi
 		
 	local utype=$(uci_get_by_name $UDP_RELAY_SERVER type)
@@ -314,8 +315,8 @@ start_redir() {
         ucmd="/usr/bin/ssr-redir"
        elif [ "$utype" == "v2ray" ] ;then
         ucmd="/usr/bin/v2ray/v2ray"
-       elif [ "$utype" == "trojan" ] ;then
-        ucmd="/usr/sbin/trojan"
+       elif [ "$stype" == "trojan" ] ;then
+        ucmd="/usr/bin/trojan/trojan"
      fi
   
   if [ "$(uci_get_by_type global threads 0)" = "0" ] ;then
@@ -337,8 +338,8 @@ start_redir() {
     $sscmd -config /var/etc/v2-ssr-retcp.json >/dev/null 2>&1 &
     echo "$(date "+%Y-%m-%d %H:%M:%S") $($sscmd -version | head -1) Started!" >> /tmp/ssrplus.log
   elif [ "$stype" == "trojan" ] ;then
-    $sscmd --config /var/etc/trojan-ssr-retcp.json >/dev/null 2>&1 & 
-    echo "$(date "+%Y-%m-%d %H:%M:%S") $($sscmd --version 2>&1 | head -1) Started!" >> /tmp/ssrplus.log
+    $sscmd -c /var/etc/trojan-ssr-retcp.json >/dev/null 2>&1 &
+    echo "$(date "+%Y-%m-%d %H:%M:%S") Trojan Started!" >> /tmp/ssrplus.log
 	fi
 	
 	if [ -n "$UDP_RELAY_SERVER" ] ;then
@@ -356,11 +357,10 @@ start_redir() {
         lua /usr/share/shadowsocksr/genv2config.lua $UDP_RELAY_SERVER udp $(uci_get_by_name $UDP_RELAY_SERVER local_port) > /var/etc/v2-ssr-reudp.json
         sed -i 's/\\//g' /var/etc/v2-ssr-reudp.json
         $ucmd -config /var/etc/v2-ssr-reudp.json >/dev/null 2>&1 & 
-     elif [ "$stype" == "trojan" ] ;then
-        lua /usr/share/shadowsocksr/gentrojanconfig.lua $GLOBAL_SERVER client 10801 > /var/etc/trojan-ssr-reudp.json
+   elif [ "$utype" == "trojan" ] ; then
+        lua /usr/share/shadowsocksr/trojanconfig.lua $UDP_RELAY_SERVER udp $(uci_get_by_name $UDP_RELAY_SERVER local_port) > /var/etc/trojan-ssr-reudp.json
         sed -i 's/\\//g' /var/etc/trojan-ssr-reudp.json
-        $ucmd --config /var/etc/trojan-ssr-reudp.json >/dev/null 2>&1 & 
-        ipt2socks -U -4 -b 0.0.0.0 -s 127.0.0.1 -p 10801 -l $(uci_get_by_name $UDP_RELAY_SERVER local_port) >/dev/null 2>&1 &
+        $ucmd -c /var/etc/trojan-ssr-reudp.json >/dev/null 2>&1 &  
     fi
    fi
 
@@ -553,8 +553,7 @@ stop() {
 	killall -q -9 ss-redir
 	killall -q -9 ssr-redir
 	killall -q -9 v2ray
-	killall -q -9 trojan
-	killall -q -9 ipt2socks
+        killall -q -9 trojan
 	killall -q -9 ssr-server
 	killall -q -9 kcptun-client
 	killall -q -9 ssr-local

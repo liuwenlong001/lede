@@ -2,14 +2,14 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-ssr-plus
 PKG_VERSION:=1
-PKG_RELEASE:=131
+PKG_RELEASE:=125
 
 PKG_CONFIG_DEPENDS:= CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks \
 	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_V2ray \
-	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Trojan \
 	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Kcptun \
 	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Server \
-	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Socks
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Socks \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Trojan
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -21,14 +21,14 @@ config PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks
 config PACKAGE_$(PKG_NAME)_INCLUDE_V2ray
 	bool "Include V2ray"
 	default y if x86_64
-	
+
 config PACKAGE_$(PKG_NAME)_INCLUDE_Trojan
 	bool "Include Trojan"
 	default y if x86_64
 	
 config PACKAGE_$(PKG_NAME)_INCLUDE_Kcptun
 	bool "Include Kcptun"
-	default n
+	default y if x86_64
 	
 config PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Server
 	bool "Include ShadowsocksR Server"
@@ -49,7 +49,6 @@ define Package/luci-app-ssr-plus
             +PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks:shadowsocks-libev-ss-redir \
             +PACKAGE_$(PKG_NAME)_INCLUDE_V2ray:v2ray \
             +PACKAGE_$(PKG_NAME)_INCLUDE_Trojan:trojan \
-            +PACKAGE_$(PKG_NAME)_INCLUDE_Trojan:ipt2socks \
             +PACKAGE_$(PKG_NAME)_INCLUDE_Kcptun:kcptun-client \
             +PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Server:shadowsocksr-libev-server \
             +PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Socks:shadowsocksr-libev-ssr-local
